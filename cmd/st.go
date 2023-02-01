@@ -1,5 +1,5 @@
 /*
-Copyright © 2023 NAME HERE <EMAIL ADDRESS>
+Copyright © 2023 Victor Guidi <EMAIL ADDRESS>
 */
 package cmd
 
@@ -38,18 +38,16 @@ func captureStdout(f func()) string {
 
 func estimateProjectType(files map[string]int) string {
 
-	// Check for three type of projects:
+	// Currently Checking for five type of projects:
 	// 1. Web project
 	// 2. Go project
 	// 3. C++ project
 	// 4. Python project
 	// 5. Rust project
 
-	// Aggregate the number of files and find the probability of being one of the above projects types
-	// If the probability is high enough, return the project type
-	// if not project has probability > 0.5, return "Unknown"
+	// 1. Aggregate the number of files and find the probability of being one of the above projects types
+	// If the probability is high enough, we will return the project type
 
-	// Web project
 	probability := 0.0
 	for key, value := range files {
 		if key == "html" || key == "css" || key == "js" || key == "ts" {
@@ -107,11 +105,11 @@ var stCmd = &cobra.Command{
 	Short: "A brief description of your command",
 	Long:  ``,
 	Run: func(cmd *cobra.Command, args []string) {
-		// Parse the directory path from the args and print all the files in it
+		// We will Parse the directory path from the args and print all the files in it
 		fstatus, _ := cmd.Flags().GetBool("fzf")
 
 		if fstatus {
-			// use os/exec to call fzf passing the directory as an argument
+			// using os/exec to call fzf passing the directory as an argument
 			dir := args[0]
 
 			filteredFiles := []string{}
@@ -125,9 +123,9 @@ var stCmd = &cobra.Command{
 				filteredFiles = append(filteredFiles, file.Name())
 			}
 
-			// get the output of the fzf command
+			// Output of the fzf command
 			output := captureStdout(func() {
-				// execute the fzf command passing the files as an argument
+				// we execute the fzf command passing the files as an argument
 				cmd := exec.Command("fzf", "--reverse")
 				cmd.Stdin = strings.NewReader(strings.Join(filteredFiles, "\n"))
 				cmd.Stdout = os.Stdout
@@ -141,11 +139,11 @@ var stCmd = &cobra.Command{
 			dir := args[0]
 			files := readDirectory(dir)
 
-			// Make a vector that will hold the type of each file the amount of times it appears
+			// Vector that will hold the type of each file the amount of times it appears
 			types := make(map[string]int)
 
 			for _, file := range files {
-				// Get the file extension for each file and add it to the map
+				// File extension for each file and add it to the map
 				// make sure the file has an extension
 				if len(strings.Split(file.Name(), ".")) < 2 {
 					continue

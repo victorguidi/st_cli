@@ -36,7 +36,15 @@ func captureStdout(f func()) string {
 	return string(out)
 }
 
+type Language struct {
+	name        string
+	probability float64
+	extensions  []string
+}
+
 func estimateProjectType(files map[string]int) string {
+
+	//TODO Add separation for when the project might be a mix of languages, for example a frontend folder using React and a backend folder using Go
 
 	// Currently Checking for five type of projects:
 	// 1. Web project
@@ -48,36 +56,69 @@ func estimateProjectType(files map[string]int) string {
 	// 1. Aggregate the number of files and find the probability of being one of the above projects types
 	// If the probability is high enough, we will return the project type
 
-	probability := 0.0
+	var languages = []Language{
+		{
+			name:        "Web",
+			probability: 0.0,
+			extensions:  []string{"html", "css", "js", "jsx", "ts", "tsx", "json", "xml", "yml", "yaml", "md", "txt", "csv", "svg", "png", "jpg", "jpeg", "gif", "ico", "webp", "mp4", "webm", "asm"},
+		},
+		{
+			name:        "Go",
+			probability: 0.0,
+			extensions:  []string{"go", "mod", "sum"},
+		},
+		{
+			name:        "C++",
+			probability: 0.0,
+			extensions:  []string{"cpp", "h", "out", "c"},
+		},
+		{
+			name:        "Python",
+			probability: 0.0,
+			extensions:  []string{"py", "pyc", "pyd", "pyo", "pyw", "pyz", "pyi", "pyc", "pyd", "pyo", "pyw", "pyz", "pyi"},
+		},
+		{
+			name:        "Rust",
+			probability: 0.0,
+			extensions:  []string{"rs", "toml"},
+		},
+	}
+
+	// We will iterate over the files and check if the extension is in the list of extensions for each language
 	for key, value := range files {
-		if key == "html" || key == "css" || key == "js" || key == "ts" {
-			if float64(0.0)*float64(value) > probability {
-				probability = float64(0.0) * float64(value)
+		for i := 0; i < len(languages); i++ {
+			for j := 0; j < len(languages[i].extensions); j++ {
+				if key == languages[i].extensions[j] {
+					languages[i].probability += float64(value) / float64(len(files))
+				}
 			}
-			return "Web"
-		} else if key == "go" {
-			if float64(0.0)*float64(value) > probability {
-				probability = float64(0.0) * float64(value)
-			}
-			return "Go"
-		} else if key == "cpp" || key == "h" {
-			if float64(0.0)*float64(value) > probability {
-				probability = float64(0.0) * float64(value)
-			}
-			return "cpp"
-		} else if key == "py" {
-			if float64(0.0)*float64(value) > probability {
-				probability = float64(0.0) * float64(value)
-			}
-			return "py"
-		} else if key == "rs" {
-			if float64(0.0)*float64(value) > probability {
-				probability = float64(0.0) * float64(value)
-			}
-			return "rs"
 		}
 	}
-	return "Unknown"
+
+	type LanguageProbability struct {
+		name        string
+		probability float64
+	}
+
+	var languageProbability = LanguageProbability{
+		name:        "",
+		probability: 0.0,
+	}
+
+	// We will iterate over the languages and check if the probability is high enough, if is high enough we will update it to the LanguageProbability struct
+	for i := 0; i < len(languages); i++ {
+		if languages[i].probability > languageProbability.probability {
+			languageProbability.name = languages[i].name
+			languageProbability.probability = languages[i].probability
+		}
+	}
+
+	if languageProbability.probability > 0.0 {
+		return `The project probably is a ` + languageProbability.name + ` project with a weight of approximatly ` + fmt.Sprintf("%.2f", (languageProbability.probability/float64(len(files)))*100) + "%"
+	} else {
+		return "Unknown"
+	}
+
 }
 
 func readDirectory(dir string) []os.FileInfo {
@@ -106,6 +147,20 @@ var stCmd = &cobra.Command{
 	Long:  ``,
 	Run: func(cmd *cobra.Command, args []string) {
 		// We will Parse the directory path from the args and print all the files in it
+
+		// Reading the config file if exists
+		// config, _ := cmd.Flags().GetString("config")
+		// var yml map[string]interface{}
+		// if config != "" {
+		// 	c, err := utils.ReadYml(config)
+		// 	if err != nil {
+		// 		yml = nil
+		// 	} else {
+		// 		yml = c
+		// 	}
+		// }
+		// fmt.Println(yml)
+
 		fstatus, _ := cmd.Flags().GetBool("fzf")
 
 		if fstatus {
@@ -133,6 +188,7 @@ var stCmd = &cobra.Command{
 				cmd.Run()
 			})
 
+			// TODO: Add a way to check if the file is a directory or not and if it is, call the function again
 			fmt.Println("Selected file:", output)
 
 		} else {
@@ -170,6 +226,7 @@ func init() {
 	// stCmd.MarkFlagRequired("config")
 
 	stCmd.Flags().BoolP("fzf", "f", false, "Open files with fzf")
+	stCmd.Flags().BoolP("config", "c", false, "Use a config file")
 
 	// Cobra supports Persistent Flags which will work for this command
 	// and all subcommands, e.g.:

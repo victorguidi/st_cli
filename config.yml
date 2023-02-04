@@ -1,0 +1,12 @@
+name: "test"
+
+classfied: true
+
+folders:
+    - backend    
+
+ignore:
+    - node_modules
+    - .git
+
+

@@ -7,11 +7,11 @@ import (
 	"fmt"
 	"io"
 	"os"
-	"os/exec"
 	"path/filepath"
 	"strings"
 
 	"github.com/spf13/cobra"
+	"github.com/victorguidi/st_cli/utils"
 )
 
 func ReadDir(dirname string) ([]os.FileInfo, error) {
@@ -45,6 +45,8 @@ type Language struct {
 func estimateProjectType(files map[string]int) string {
 
 	//TODO Add separation for when the project might be a mix of languages, for example a frontend folder using React and a backend folder using Go
+	//TODO Check if there are any test files, if there are, we will also return the weight of the test files
+	//Based on the project structure, we will generate a DOCKERFILE and a docker-compose.yml file suited for the project
 
 	// Currently Checking for five type of projects:
 	// 1. Web project
@@ -84,6 +86,11 @@ func estimateProjectType(files map[string]int) string {
 		},
 	}
 
+	// type Folders struct {
+	// 	name           string
+	// 	fileExtensions []string
+	// }
+
 	// We will iterate over the files and check if the extension is in the list of extensions for each language
 	for key, value := range files {
 		for i := 0; i < len(languages); i++ {
@@ -121,18 +128,127 @@ func estimateProjectType(files map[string]int) string {
 
 }
 
-func readDirectory(dir string) []os.FileInfo {
+type Folders struct {
+	name   string
+	weight []string
+}
+
+// func readDirectory(dir string) []os.FileInfo {
+func readDirectory(dir string, yml *map[string]interface{}) []os.FileInfo {
+	//TODO Improve the performance of this function
+
+	// If yml["folder"] is not empty, we will group the files by folder
+	// and then return the weight of each folder
+	// newFolder := Folders{
+	// 	name:   file.Name(),
+	// 	weight: []string{},
+	// }
+
 	files, err := ReadDir(dir)
 	if err != nil {
 		fmt.Println("Error reading directory:", err)
 		return nil
 	}
 	allFiles := []os.FileInfo{}
-
+loop:
 	for _, file := range files {
+		// if file.IsDir() {
+		// 	for _, ignore := range (*yml)["ignore"].([]interface{}) {
+		// 		if file.Name() == ignore {
+		// 			continue loop
+		// 		}
+		// 	}
+		// 	if (*yml)["classfied"].(interface{}).(bool) {
+		// 		// Check if the folder is in the yml["folder"] list
+		// 		if (*yml)["folders"].([]interface{})[0] != nil {
+		// 			for _, folder := range (*yml)["folders"].([]interface{}) {
+		// 				if file.Name() == folder {
+		// 					// If the folder is in the list, we will read the files in the folder and return the weight of the folder
+		// 					subdirFiles := readDirectory(filepath.Join(dir, file.Name()), yml)
+		// 					// Vector that will hold the type of each file the amount of times it appears
+		// 					types := make(map[string]int)
+
+		// 					for _, file := range subdirFiles {
+		// 						// File extension for each file and add it to the map
+		// 						// make sure the file has an extension
+		// 						if len(strings.Split(file.Name(), ".")) < 2 {
+		// 							continue
+		// 						}
+		// 						extension := strings.Split(file.Name(), ".")[1]
+		// 						types[extension]++
+		// 					}
+		// 					fmt.Println(file.Name(), estimateProjectType(types))
+		// 				}
+		// 			}
+		// 			continue loop
+		// 		} else {
+		// 			subdirFiles := readDirectory(filepath.Join(dir, file.Name()), yml)
+		// 			// Vector that will hold the type of each file the amount of times it appears
+		// 			types := make(map[string]int)
+
+		// 			for _, file := range subdirFiles {
+		// 				// File extension for each file and add it to the map
+		// 				// make sure the file has an extension
+		// 				if len(strings.Split(file.Name(), ".")) < 2 {
+		// 					continue
+		// 				}
+		// 				extension := strings.Split(file.Name(), ".")[1]
+		// 				types[extension]++
+		// 			}
+		// 			fmt.Println(file.Name(), estimateProjectType(types))
+		// 		}
+		// 		subdirFiles := readDirectory(filepath.Join(dir, file.Name()), yml)
+		// 		allFiles = append(allFiles, subdirFiles...)
+		// 	} else {
+		// 		for _, file := range files {
+		// 			if file.IsDir() {
+		// 				subdirFiles := readDirectory(filepath.Join(dir, file.Name()), yml)
+		// 				allFiles = append(allFiles, subdirFiles...)
+		// 			} else {
+		// 				allFiles = append(allFiles, file)
+		// 			}
+		// 		}
+		// 	}
+		// } else {
+		// 	allFiles = append(allFiles, file)
+		// }
 		if file.IsDir() {
-			subdirFiles := readDirectory(filepath.Join(dir, file.Name()))
-			allFiles = append(allFiles, subdirFiles...)
+			for _, ignore := range (*yml)["ignore"].([]interface{}) {
+				if file.Name() == ignore {
+					continue loop
+				}
+			}
+
+			if (*yml)["classfied"].(interface{}).(bool) {
+				processSubDirectory := func() {
+					subdirFiles := readDirectory(filepath.Join(dir, file.Name()), yml)
+					types := make(map[string]int)
+					for _, subFile := range subdirFiles {
+						ext := filepath.Ext(subFile.Name())
+						if ext == "" {
+							continue
+						}
+						types[strings.TrimPrefix(ext, ".")]++
+					}
+					fmt.Println(file.Name(), estimateProjectType(types))
+				}
+
+				if (*yml)["folders"].([]interface{})[0] != nil {
+					for _, folder := range (*yml)["folders"].([]interface{}) {
+						switch file.Name() {
+						case folder:
+							processSubDirectory()
+							continue
+						default:
+							allFiles = append(allFiles, file)
+						}
+					}
+				} else {
+					processSubDirectory()
+				}
+			} else {
+				allFiles = append(allFiles, file)
+			}
 		} else {
 			allFiles = append(allFiles, file)
 		}
@@ -149,70 +265,71 @@ var stCmd = &cobra.Command{
 		// We will Parse the directory path from the args and print all the files in it
 
 		// Reading the config file if exists
-		// config, _ := cmd.Flags().GetString("config")
-		// var yml map[string]interface{}
-		// if config != "" {
-		// 	c, err := utils.ReadYml(config)
-		// 	if err != nil {
-		// 		yml = nil
-		// 	} else {
-		// 		yml = c
-		// 	}
-		// }
-		// fmt.Println(yml)
-
-		fstatus, _ := cmd.Flags().GetBool("fzf")
-
-		if fstatus {
-			// using os/exec to call fzf passing the directory as an argument
-			dir := args[0]
-
-			filteredFiles := []string{}
-
-			files, err := ReadDir(dir)
+		config, _ := cmd.Flags().GetBool("config")
+		var yml map[string]interface{}
+		if config {
+			c, err := utils.ReadYml(args[1])
 			if err != nil {
-				fmt.Println("Error reading directory:", err)
+				panic(err)
+			} else {
+				yml = c
 			}
-
-			for _, file := range files {
-				filteredFiles = append(filteredFiles, file.Name())
-			}
-
-			// Output of the fzf command
-			output := captureStdout(func() {
-				// we execute the fzf command passing the files as an argument
-				cmd := exec.Command("fzf", "--reverse")
-				cmd.Stdin = strings.NewReader(strings.Join(filteredFiles, "\n"))
-				cmd.Stdout = os.Stdout
-				cmd.Stderr = os.Stderr
-				cmd.Run()
-			})
-
-			// TODO: Add a way to check if the file is a directory or not and if it is, call the function again
-			fmt.Println("Selected file:", output)
-
-		} else {
-			dir := args[0]
-			files := readDirectory(dir)
-
-			// Vector that will hold the type of each file the amount of times it appears
-			types := make(map[string]int)
-
-			for _, file := range files {
-				// File extension for each file and add it to the map
-				// make sure the file has an extension
-				if len(strings.Split(file.Name(), ".")) < 2 {
-					continue
-				}
-				extension := strings.Split(file.Name(), ".")[1]
-				types[extension]++
-			}
-
-			// for key, value := range types {
-			// 	fmt.Println(key, ":", value)
-			// }
-			fmt.Println(estimateProjectType(types))
 		}
+
+		dir := args[0]
+		files := readDirectory(dir, &yml)
+		// files := readDirectory(dir)
+
+		// Vector that will hold the type of each file the amount of times it appears
+		types := make(map[string]int)
+
+		for _, file := range files {
+			// File extension for each file and add it to the map
+			// make sure the file has an extension
+			if len(strings.Split(file.Name(), ".")) < 2 {
+				continue
+			}
+			extension := strings.Split(file.Name(), ".")[1]
+			types[extension]++
+		}
+
+		// for key, value := range types {
+		// 	fmt.Println(key, ":", value)
+		// }
+		fmt.Println(estimateProjectType(types))
+
+		// fstatus, _ := cmd.Flags().GetBool("fzf")
+
+		// if fstatus {
+		// using os/exec to call fzf passing the directory as an argument
+		// dir := args[0]
+
+		// filteredFiles := []string{}
+
+		// files, err := ReadDir(dir)
+		// if err != nil {
+		// 	fmt.Println("Error reading directory:", err)
+		// }
+
+		// for _, file := range files {
+		// 	filteredFiles = append(filteredFiles, file.Name())
+		// }
+
+		// // Output of the fzf command
+		// output := captureStdout(func() {
+		// 	// we execute the fzf command passing the files as an argument
+		// 	cmd := exec.Command("fzf", "--reverse")
+		// 	cmd.Stdin = strings.NewReader(strings.Join(filteredFiles, "\n"))
+		// 	cmd.Stdout = os.Stdout
+		// 	cmd.Stderr = os.Stderr
+		// 	cmd.Run()
+		// })
+
+		// // TODO: Add a way to check if the file is a directory or not and if it is, call the function again
+		// fmt.Println("Selected file:", output)
+
+		// } else {
+		// }
 	},
 }
 

@@ -7,9 +7,10 @@ import (
 )
 
 type Config struct {
-	directory  string
-	tests      bool
-	multiStage bool
+	name      string
+	classfied bool
+	folders   []string
+	ignore    []string
 }
 
 func ReadYml(filename string) (map[string]interface{}, error) {

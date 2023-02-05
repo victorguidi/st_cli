@@ -77,6 +77,7 @@ func estimateProjectType(files map[string]int) *LanguageProbability {
 
 	//TODO Check if there are any test files, if there are, we will also return the weight of the test files
 	//Based on the project structure, we will generate a DOCKERFILE and a docker-compose.yml file suited for the project
+	// TODO Add the possibility to parse only for some specific languages given by the user in the config file
 
 	// Currently Checking for five type of projects:
 	// 1. Web project

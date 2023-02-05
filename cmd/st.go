@@ -8,7 +8,9 @@ import (
 	"io"
 	"os"
 	"path/filepath"
+	"sort"
 	"strings"
+	"text/tabwriter"
 
 	"github.com/spf13/cobra"
 	"github.com/victorguidi/st_cli/utils"
@@ -36,15 +38,43 @@ func captureStdout(f func()) string {
 	return string(out)
 }
 
+func binarySearch(arr []string, x string) int {
+	l := 0
+	r := len(arr) - 1
+	for l <= r {
+		m := l + (r-l)/2
+		if arr[m] == x {
+			return m
+		}
+		if arr[m] < x {
+			l = m + 1
+		} else {
+			r = m - 1
+		}
+	}
+	return -1
+}
+
 type Language struct {
 	name        string
 	probability float64
 	extensions  []string
 }
 
-func estimateProjectType(files map[string]int) string {
+type LanguageProbability struct {
+	name        string
+	probability float64
+}
 
-	//TODO Add separation for when the project might be a mix of languages, for example a frontend folder using React and a backend folder using Go
+type Folders struct {
+	name        string
+	projectType *LanguageProbability
+	files       []os.FileInfo
+	weight      int
+}
+
+func estimateProjectType(files map[string]int) *LanguageProbability {
+
 	//TODO Check if there are any test files, if there are, we will also return the weight of the test files
 	//Based on the project structure, we will generate a DOCKERFILE and a docker-compose.yml file suited for the project
 
@@ -86,25 +116,21 @@ func estimateProjectType(files map[string]int) string {
 		},
 	}
 
-	// type Folders struct {
-	// 	name           string
-	// 	fileExtensions []string
-	// }
-
 	// We will iterate over the files and check if the extension is in the list of extensions for each language
 	for key, value := range files {
 		for i := 0; i < len(languages); i++ {
-			for j := 0; j < len(languages[i].extensions); j++ {
-				if key == languages[i].extensions[j] {
-					languages[i].probability += float64(value) / float64(len(files))
+			sort.Slice(languages[i].extensions, func(i2, j int) bool {
+				return languages[i].extensions[i2] < languages[i].extensions[j]
+			})
+			if binarySearch(languages[i].extensions, key) != -1 {
+				// The probability of the language can be maximum 1.0, for example if I have 10 files and 5 of them are .go files, the probability of the project being a Go project is 0.5
+				languages[i].probability += float64(value) / float64(len(files))
+				if languages[i].probability > 1.0 {
+					languages[i].probability = 1.0
 				}
 			}
-		}
-	}
 
-	type LanguageProbability struct {
-		name        string
-		probability float64
+		}
 	}
 
 	var languageProbability = LanguageProbability{
@@ -121,28 +147,16 @@ func estimateProjectType(files map[string]int) string {
 	}
 
 	if languageProbability.probability > 0.0 {
-		return `The project probably is a ` + languageProbability.name + ` project with a weight of approximatly ` + fmt.Sprintf("%.2f", (languageProbability.probability/float64(len(files)))*100) + "%"
+		// return `The project probably is a ` + languageProbability.name + ` project with a weight of approximatly ` + fmt.Sprintf("%.2f", (languageProbability.probability/float64(len(files)))*100) + "%"
+		return &languageProbability
 	} else {
-		return "Unknown"
+		return nil
 	}
 
 }
 
-type Folders struct {
-	name   string
-	weight []string
-}
-
 // func readDirectory(dir string) []os.FileInfo {
-func readDirectory(dir string, yml *map[string]interface{}) []os.FileInfo {
-	//TODO Improve the performance of this function
-
-	// If yml["folder"] is not empty, we will group the files by folder
-	// and then return the weight of each folder
-	// newFolder := Folders{
-	// 	name:   file.Name(),
-	// 	weight: []string{},
-	// }
+func readDirectory(dir string, yml *map[string]interface{}, folders *[]Folders) []os.FileInfo {
 
 	files, err := ReadDir(dir)
 	if err != nil {
@@ -152,66 +166,6 @@ func readDirectory(dir string, yml *map[string]interface{}) []os.FileInfo {
 	allFiles := []os.FileInfo{}
 loop:
 	for _, file := range files {
-		// if file.IsDir() {
-		// 	for _, ignore := range (*yml)["ignore"].([]interface{}) {
-		// 		if file.Name() == ignore {
-		// 			continue loop
-		// 		}
-		// 	}
-		// 	if (*yml)["classfied"].(interface{}).(bool) {
-		// 		// Check if the folder is in the yml["folder"] list
-		// 		if (*yml)["folders"].([]interface{})[0] != nil {
-		// 			for _, folder := range (*yml)["folders"].([]interface{}) {
-		// 				if file.Name() == folder {
-		// 					// If the folder is in the list, we will read the files in the folder and return the weight of the folder
-		// 					subdirFiles := readDirectory(filepath.Join(dir, file.Name()), yml)
-		// 					// Vector that will hold the type of each file the amount of times it appears
-		// 					types := make(map[string]int)
-
-		// 					for _, file := range subdirFiles {
-		// 						// File extension for each file and add it to the map
-		// 						// make sure the file has an extension
-		// 						if len(strings.Split(file.Name(), ".")) < 2 {
-		// 							continue
-		// 						}
-		// 						extension := strings.Split(file.Name(), ".")[1]
-		// 						types[extension]++
-		// 					}
-		// 					fmt.Println(file.Name(), estimateProjectType(types))
-		// 				}
-		// 			}
-		// 			continue loop
-		// 		} else {
-		// 			subdirFiles := readDirectory(filepath.Join(dir, file.Name()), yml)
-		// 			// Vector that will hold the type of each file the amount of times it appears
-		// 			types := make(map[string]int)
-
-		// 			for _, file := range subdirFiles {
-		// 				// File extension for each file and add it to the map
-		// 				// make sure the file has an extension
-		// 				if len(strings.Split(file.Name(), ".")) < 2 {
-		// 					continue
-		// 				}
-		// 				extension := strings.Split(file.Name(), ".")[1]
-		// 				types[extension]++
-		// 			}
-		// 			fmt.Println(file.Name(), estimateProjectType(types))
-		// 		}
-		// 		subdirFiles := readDirectory(filepath.Join(dir, file.Name()), yml)
-		// 		allFiles = append(allFiles, subdirFiles...)
-		// 	} else {
-		// 		for _, file := range files {
-		// 			if file.IsDir() {
-		// 				subdirFiles := readDirectory(filepath.Join(dir, file.Name()), yml)
-		// 				allFiles = append(allFiles, subdirFiles...)
-		// 			} else {
-		// 				allFiles = append(allFiles, file)
-		// 			}
-		// 		}
-		// 	}
-		// } else {
-		// 	allFiles = append(allFiles, file)
-		// }
 		if file.IsDir() {
 			for _, ignore := range (*yml)["ignore"].([]interface{}) {
 				if file.Name() == ignore {
@@ -221,7 +175,7 @@ loop:
 
 			if (*yml)["classfied"].(interface{}).(bool) {
 				processSubDirectory := func() {
-					subdirFiles := readDirectory(filepath.Join(dir, file.Name()), yml)
+					subdirFiles := readDirectory(filepath.Join(dir, file.Name()), yml, folders)
 					types := make(map[string]int)
 					for _, subFile := range subdirFiles {
 						ext := filepath.Ext(subFile.Name())
@@ -230,7 +184,17 @@ loop:
 						}
 						types[strings.TrimPrefix(ext, ".")]++
 					}
-					fmt.Println(file.Name(), estimateProjectType(types))
+					*folders = append(*folders, Folders{
+						name:        file.Name(),
+						projectType: estimateProjectType(types),
+						weight: func() int {
+							var total int
+							for _, value := range subdirFiles {
+								total += int(value.Size())
+							}
+							return total
+						}(),
+					})
 				}
 
 				if (*yml)["folders"].([]interface{})[0] != nil {
@@ -276,8 +240,10 @@ var stCmd = &cobra.Command{
 			}
 		}
 
+		folders := []Folders{}
+
 		dir := args[0]
-		files := readDirectory(dir, &yml)
+		files := readDirectory(dir, &yml, &folders)
 		// files := readDirectory(dir)
 
 		// Vector that will hold the type of each file the amount of times it appears
@@ -296,7 +262,31 @@ var stCmd = &cobra.Command{
 		// for key, value := range types {
 		// 	fmt.Println(key, ":", value)
 		// }
-		fmt.Println(estimateProjectType(types))
+		final := estimateProjectType(types)
+
+		if final != nil {
+
+			fmt.Printf("The project probably is a %s project with a weight of approximatly %.2f%%\n", final.name, (final.probability)*100)
+
+			// print a formated table with the information present in final
+			table := tabwriter.NewWriter(os.Stdout, 0, 0, 3, ' ', tabwriter.TabIndent)
+
+			fmt.Fprintln(table, "Folder_Name\tType\tWeight\tTotalSize\t")
+			if len(folders) > 0 {
+				fmt.Printf("\nHere is a list By Folder:\n\n")
+				for _, folder := range folders {
+					if folder.projectType == nil {
+						fmt.Fprintln(table, folder.name+"\t", "Unknown"+"\t", "Unknown"+"\t", fmt.Sprintf("%.2f", (float64(folder.weight)/1024)/1024)+"MB"+"\t")
+						continue
+					}
+					fmt.Fprintln(table, folder.name+"\t", folder.projectType.name+"\t", fmt.Sprintf("%.1f", (folder.projectType.probability*100))+"%"+"\t"+fmt.Sprintf("%.2f", (float64(folder.weight)/1024)/1024)+"MB"+"\t")
+				}
+			} else {
+				fmt.Fprintln(table, "All Folders", final.name+"\t", fmt.Sprintf("%.1f", (final.probability*100))+"%"+"\t")
+
+			}
+			table.Flush()
+		}
 
 		// fstatus, _ := cmd.Flags().GetBool("fzf")
 

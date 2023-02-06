@@ -231,62 +231,70 @@ var stCmd = &cobra.Command{
 
 		// Reading the config file if exists
 		config, _ := cmd.Flags().GetBool("config")
-		var yml map[string]interface{}
-		if config {
-			c, err := utils.ReadYml(args[1])
-			if err != nil {
-				panic(err)
-			} else {
-				yml = c
-			}
-		}
 
-		folders := []Folders{}
+		if len(args) > 0 {
 
-		dir := args[0]
-		files := readDirectory(dir, &yml, &folders)
-		// files := readDirectory(dir)
+			var yml map[string]interface{}
+			if config {
+				c, err := utils.ReadYml(args[1])
+				if err != nil {
+					panic(err)
+				} else {
+					yml = c
+				}
 
-		// Vector that will hold the type of each file the amount of times it appears
-		types := make(map[string]int)
+				folders := []Folders{}
 
-		for _, file := range files {
-			// File extension for each file and add it to the map
-			// make sure the file has an extension
-			if len(strings.Split(file.Name(), ".")) < 2 {
-				continue
-			}
-			extension := strings.Split(file.Name(), ".")[1]
-			types[extension]++
-		}
+				dir := args[0]
+				files := readDirectory(dir, &yml, &folders)
+				// files := readDirectory(dir)
 
-		// for key, value := range types {
-		// 	fmt.Println(key, ":", value)
-		// }
-		final := estimateProjectType(types)
+				// Vector that will hold the type of each file the amount of times it appears
+				types := make(map[string]int)
 
-		if final != nil {
-
-			fmt.Printf("The project probably is a %s project with a weight of approximatly %.2f%%\n", final.name, (final.probability)*100)
-
-			// print a formated table with the information present in final
-			table := tabwriter.NewWriter(os.Stdout, 0, 0, 3, ' ', tabwriter.TabIndent)
-
-			fmt.Fprintln(table, "Folder_Name\tType\tWeight\tTotalSize\t")
-			if len(folders) > 0 {
-				fmt.Printf("\nHere is a list By Folder:\n\n")
-				for _, folder := range folders {
-					if folder.projectType == nil {
-						fmt.Fprintln(table, folder.name+"\t", "Unknown"+"\t", "Unknown"+"\t", fmt.Sprintf("%.2f", (float64(folder.weight)/1024)/1024)+"MB"+"\t")
+				for _, file := range files {
+					// File extension for each file and add it to the map
+					// make sure the file has an extension
+					if len(strings.Split(file.Name(), ".")) < 2 {
 						continue
 					}
-					fmt.Fprintln(table, folder.name+"\t", folder.projectType.name+"\t", fmt.Sprintf("%.1f", (folder.projectType.probability*100))+"%"+"\t"+fmt.Sprintf("%.2f", (float64(folder.weight)/1024)/1024)+"MB"+"\t")
+					extension := strings.Split(file.Name(), ".")[1]
+					types[extension]++
+				}
+
+				// for key, value := range types {
+				// 	fmt.Println(key, ":", value)
+				// }
+				final := estimateProjectType(types)
+
+				if final != nil {
+
+					fmt.Printf("The project probably is a %s project with a weight of approximatly %.2f%%\n", final.name, (final.probability)*100)
+
+					// print a formated table with the information present in final
+					table := tabwriter.NewWriter(os.Stdout, 0, 0, 3, ' ', tabwriter.TabIndent)
+
+					fmt.Fprintln(table, "Folder_Name\tType\tWeight\tTotalSize\t")
+					if len(folders) > 0 {
+						fmt.Printf("\nHere is a list By Folder:\n\n")
+						for _, folder := range folders {
+							if folder.projectType == nil {
+								fmt.Fprintln(table, folder.name+"\t", "Unknown"+"\t", "Unknown"+"\t", fmt.Sprintf("%.2f", (float64(folder.weight)/1024)/1024)+"MB"+"\t")
+								continue
+							}
+							fmt.Fprintln(table, folder.name+"\t", folder.projectType.name+"\t", fmt.Sprintf("%.1f", (folder.projectType.probability*100))+"%"+"\t"+fmt.Sprintf("%.2f", (float64(folder.weight)/1024)/1024)+"MB"+"\t")
+						}
+					} else {
+						fmt.Fprintln(table, "All Folders", final.name+"\t", fmt.Sprintf("%.1f", (final.probability*100))+"%"+"\t")
+
+					}
+					table.Flush()
 				}
 			} else {
-				fmt.Fprintln(table, "All Folders", final.name+"\t", fmt.Sprintf("%.1f", (final.probability*100))+"%"+"\t")
-
+				fmt.Println("Please provide a config file")
 			}
-			table.Flush()
+		} else {
+			fmt.Println("Please provide a directory to scan")
 		}
 
 		// fstatus, _ := cmd.Flags().GetBool("fzf")
